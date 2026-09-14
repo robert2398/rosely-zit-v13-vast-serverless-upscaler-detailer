@@ -1,0 +1,51 @@
+VAST SERVERLESS SETTINGS — ZENITH 13 MXFP8 FULL BUNDLE
+======================================================
+Endpoint name: rosely-image-zit-unified-vast
+Recommended template: ComfyUI (Serverless)
+Docker image: vastai/comfy:v0.35.0-cuda-12.9-py312
+Storage: 100 GB recommended
+GPU count: 1
+VRAM: >=24 GB (48 GB preferred when SeedVR2/detailers are used heavily)
+Verified machines: enabled
+Host reliability: >=99.5%
+
+Autoscaling starting point:
+Maximum workers: 1
+Minimum workers: 1
+Minimum load: 1
+Minimum cold load: 0
+Cold multiplier: 0
+Target utilization: 0.90
+Inactivity timeout: -1
+Max queue time: 1800
+Target queue time: 10
+
+Required env:
+SERVERLESS=true
+BACKEND=comfyui-json
+PYWORKER_REPO=https://github.com/vast-ai/pyworker
+PYWORKER_REF=2207a3f94b55a0921c1641520eeb83de5a0c1611
+BENCHMARK_JSON_PATH=/workspace/zenith13_benchmark.json
+PROVISIONING_SCRIPT=https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh
+COMFYUI_API_BASE=http://127.0.0.1:18188
+
+Model bundle:
+s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v2.tar.zst
+SHA-256: d16d5d26ccf8428b5f4271dccdd5e6827bc441131bd78ad9f983c6653e6767c6
+Size: 16175243071 bytes
+
+Bundle additionally contains:
+- SAM ViT-B
+- face / hand / eye Ultralytics detectors
+- person segmentation detector
+- SeedVR2 7B Q4_K_M DiT
+- SeedVR2 FP16 VAE
+
+Provisioning installs pinned:
+- ComfyUI-Impact-Pack @ 429d0159ad429e64d2b3916e6e7be9c22d025c3c
+- ComfyUI-Impact-Subpack @ 50c7b71a6a224734cc9b21963c6d1926816a97f1
+- ComfyUI-SeedVR2_VideoUpscaler @ 4490bd1f482e026674543386bb2a4d176da245b9
+
+GPU note: native MXFP8 tensor-core execution is Blackwell-only. RTX 3090/4090 can
+load via current ComfyUI's compatible fallback/dequant path; Blackwell is preferred
+when the rental price is competitive.

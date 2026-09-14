@@ -1,0 +1,34 @@
+# Vast Serverless / ComfyUI
+SERVERLESS=true
+BACKEND=comfyui-json
+PYWORKER_REPO=https://github.com/vast-ai/pyworker
+PYWORKER_REF=2207a3f94b55a0921c1641520eeb83de5a0c1611
+BENCHMARK_JSON_PATH=/workspace/zenith13_benchmark.json
+PROVISIONING_SCRIPT=https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh
+
+# IMPORTANT: ai-dock API wrapper must target direct ComfyUI, not the 8188 edge/Caddy port.
+COMFYUI_API_BASE=http://127.0.0.1:18188
+
+# Full Zenith 13 + LoRA + Detailer + SeedVR2 bundle
+MODEL_S3_URI=s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v2.tar.zst
+MODEL_ARCHIVE_SHA256=d16d5d26ccf8428b5f4271dccdd5e6827bc441131bd78ad9f983c6653e6767c6
+MODEL_ARCHIVE_SIZE=16175243071
+AWS_ZIT_IMAGE_MODEL_S3_REGION=us-east-1
+AWS_ZIT_IMAGE_MODEL_ACCESS_KEY_ID=REPLACE_ME
+AWS_ZIT_IMAGE_MODEL_SECRET_ACCESS_KEY=REPLACE_ME
+# AWS_ZIT_IMAGE_MODEL_SESSION_TOKEN=
+# AWS_ZIT_IMAGE_MODEL_S3_ENDPOINT_URL=
+MODEL_DOWNLOAD_CONCURRENCY=16
+MODEL_MULTIPART_CHUNK_MB=64
+
+# Generated-image S3 output
+AWS_ZIT_IMAGE_ACCESS_KEY_ID=REPLACE_ME
+AWS_ZIT_IMAGE_SECRET_ACCESS_KEY=REPLACE_ME
+AWS_ZIT_IMAGE_S3_BUCKET_NAME=rosely-infrastructure
+AWS_ZIT_IMAGE_S3_ENDPOINT_URL=
+AWS_ZIT_IMAGE_S3_REGION=us-east-1
+
+# Only used if pyworker falls back instead of using our explicit benchmark JSON.
+BENCHMARK_TEST_WIDTH=512
+BENCHMARK_TEST_HEIGHT=896
+BENCHMARK_TEST_STEPS=4
