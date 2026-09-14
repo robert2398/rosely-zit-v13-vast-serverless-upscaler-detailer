@@ -469,6 +469,15 @@ PYDOWNLOAD
     chmod 0644 "$dst"
   done < <(find "$STAGING/models" -type f -print0)
 
+  log "Creating SeedVR2 model path compatibility alias"
+  mkdir -p "$COMFY_ROOT/models"
+  rm -rf "$COMFY_ROOT/models/SEEDVR2"
+  ln -s "$COMFY_ROOT/models/seedvr2" "$COMFY_ROOT/models/SEEDVR2"
+  [[ -s "$COMFY_ROOT/models/SEEDVR2/seedvr2_ema_7b-Q4_K_M.gguf" ]] || \
+    fail "SeedVR2 DiT compatibility path missing"
+  [[ -s "$COMFY_ROOT/models/SEEDVR2/ema_vae_fp16.safetensors" ]] || \
+    fail "SeedVR2 VAE compatibility path missing"
+
   printf '%s\n' "$MODEL_ARCHIVE_SHA256" > "$READY_MARKER"
   rm -rf "$STAGING" "$ARCHIVE"
 fi
@@ -476,6 +485,17 @@ fi
 # Install custom nodes only after model extraction so the extensions see our
 # bundled checkpoints and do not need to fetch them at request time.
 install_custom_nodes
+
+# Always create the compatibility alias because the SeedVR2 extension may look
+# under models/SEEDVR2 while our bundle is stored under models/seedvr2.
+log "Ensuring SeedVR2 model path compatibility alias"
+mkdir -p "$COMFY_ROOT/models"
+rm -rf "$COMFY_ROOT/models/SEEDVR2"
+ln -s "$COMFY_ROOT/models/seedvr2" "$COMFY_ROOT/models/SEEDVR2"
+[[ -s "$COMFY_ROOT/models/SEEDVR2/seedvr2_ema_7b-Q4_K_M.gguf" ]] || \
+  fail "SeedVR2 DiT compatibility path missing"
+[[ -s "$COMFY_ROOT/models/SEEDVR2/ema_vae_fp16.safetensors" ]] || \
+  fail "SeedVR2 VAE compatibility path missing"
 
 log "Writing deterministic Zenith13 worker benchmark"
 cat > "$BENCHMARK_JSON_PATH" <<'JSONBENCH'
