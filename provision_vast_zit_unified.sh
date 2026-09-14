@@ -28,14 +28,21 @@ CUSTOM_NODES_MARKER="${STATE_ROOT}/custom-nodes.refs"
 BENCHMARK_JSON_PATH="${BENCHMARK_JSON_PATH:-/workspace/zenith13_benchmark.json}"
 WELLKNOWN_BENCHMARK="/opt/comfyui-api-wrapper/workflows/pyworker_benchmark.json"
 
-# Pinned custom-node revisions used by the optional Detailer / SeedVR2 flows.
+# Pinned custom-node revisions used by the Detailer / SeedVR2 pipeline.
 IMPACT_PACK_REPO="${IMPACT_PACK_REPO:-https://github.com/ltdrdata/ComfyUI-Impact-Pack.git}"
 IMPACT_PACK_REF="${IMPACT_PACK_REF:-429d0159ad429e64d2b3916e6e7be9c22d025c3c}"
+
 IMPACT_SUBPACK_REPO="${IMPACT_SUBPACK_REPO:-https://github.com/ltdrdata/ComfyUI-Impact-Subpack.git}"
 IMPACT_SUBPACK_REF="${IMPACT_SUBPACK_REF:-50c7b71a6a224734cc9b21963c6d1926816a97f1}"
+
 SEEDVR2_REPO="${SEEDVR2_REPO:-https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git}"
 SEEDVR2_REF="${SEEDVR2_REF:-4490bd1f482e026674543386bb2a4d176da245b9}"
-CUSTOM_NODE_SET_ID="impact=${IMPACT_PACK_REF};subpack=${IMPACT_SUBPACK_REF};seedvr2=${SEEDVR2_REF}"
+
+# Provides FastUnsharpSharpen and FastFilmGrain used by the MrSmith workflow.
+VRGAME_REPO="${VRGAME_REPO:-https://github.com/vrgamegirl19/comfyui-vrgamedevgirl.git}"
+VRGAME_REF="${VRGAME_REF:-f633a8b0824e81cd9e3ad2f9f0f51f1f9680353b}"
+
+CUSTOM_NODE_SET_ID="impact=${IMPACT_PACK_REF};subpack=${IMPACT_SUBPACK_REF};seedvr2=${SEEDVR2_REF};vrgame=${VRGAME_REF}"
 
 REQUIRED_ASSETS=(
   "models/diffusion_models/Zenith_13.0_MXFP8_E4M3.safetensors"
@@ -58,6 +65,7 @@ REQUIRED_ASSETS=(
 models_ready(){
   [[ -f "$READY_MARKER" ]] || return 1
   [[ "$(tr -d '[:space:]' < "$READY_MARKER")" == "$MODEL_ARCHIVE_SHA256" ]] || return 1
+
   local rel
   for rel in "${REQUIRED_ASSETS[@]}"; do
     [[ -s "$COMFY_ROOT/$rel" ]] || return 1
@@ -70,6 +78,7 @@ custom_nodes_ready(){
   [[ -d "$COMFY_ROOT/custom_nodes/ComfyUI-Impact-Pack" ]] || return 1
   [[ -d "$COMFY_ROOT/custom_nodes/ComfyUI-Impact-Subpack" ]] || return 1
   [[ -d "$COMFY_ROOT/custom_nodes/ComfyUI-SeedVR2_VideoUpscaler" ]] || return 1
+  [[ -d "$COMFY_ROOT/custom_nodes/comfyui-vrgamedevgirl" ]] || return 1
 }
 
 log "Runtime validation"
@@ -79,12 +88,15 @@ try:
     import torch
 except Exception as exc:
     raise SystemExit(f"torch import failed: {exc}")
+
 print("python =", sys.version.split()[0])
 print("torch =", torch.__version__)
 print("torch.version.cuda =", torch.version.cuda)
 print("cuda available =", torch.cuda.is_available())
+
 if not torch.cuda.is_available():
     raise SystemExit("CUDA is unavailable")
+
 print("gpu =", torch.cuda.get_device_name(0))
 major, minor = torch.cuda.get_device_capability(0)
 print("compute capability =", f"{major}.{minor}")
@@ -149,18 +161,20 @@ PYPATCH
 install_git_node(){
   local repo="$1" ref="$2" dirname="$3"
   local dest="$COMFY_ROOT/custom_nodes/$dirname"
+
   rm -rf "$dest"
   mkdir -p "$dest"
   git -C "$dest" init -q
   git -C "$dest" remote add origin "$repo"
   git -C "$dest" fetch -q --depth 1 origin "$ref"
   git -C "$dest" checkout -q --detach FETCH_HEAD
+
   log "Installed custom node $dirname @ $(git -C "$dest" rev-parse --short HEAD)"
 }
 
 install_custom_nodes(){
   if custom_nodes_ready; then
-    log "Pinned Detailer/SeedVR2 custom nodes already installed; skipping"
+    log "Pinned Detailer/SeedVR2/VRGameDevGirl custom nodes already installed; skipping"
     return
   fi
 
@@ -171,35 +185,134 @@ install_custom_nodes(){
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git
   fi
 
-  mkdir -p "$COMFY_ROOT/custom_nodes"
+  mkdir -p "$COMFY_ROOT/custom_nodes" "$STATE_ROOT"
 
   install_git_node "$IMPACT_PACK_REPO" "$IMPACT_PACK_REF" "ComfyUI-Impact-Pack"
   install_git_node "$IMPACT_SUBPACK_REPO" "$IMPACT_SUBPACK_REF" "ComfyUI-Impact-Subpack"
   install_git_node "$SEEDVR2_REPO" "$SEEDVR2_REF" "ComfyUI-SeedVR2_VideoUpscaler"
+  install_git_node "$VRGAME_REPO" "$VRGAME_REF" "comfyui-vrgamedevgirl"
 
   log "Installing Impact Pack dependencies"
-  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet -r "$COMFY_ROOT/custom_nodes/ComfyUI-Impact-Pack/requirements.txt"
+  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet \
+    -r "$COMFY_ROOT/custom_nodes/ComfyUI-Impact-Pack/requirements.txt"
+
   COMFYUI_PATH="$COMFY_ROOT" COMFYUI_MODEL_PATH="$COMFY_ROOT/models" \
     "$PYTHON_BIN" "$COMFY_ROOT/custom_nodes/ComfyUI-Impact-Pack/install.py"
 
   log "Installing Impact Subpack dependencies"
-  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet -r "$COMFY_ROOT/custom_nodes/ComfyUI-Impact-Subpack/requirements.txt"
+  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet \
+    -r "$COMFY_ROOT/custom_nodes/ComfyUI-Impact-Subpack/requirements.txt"
 
-  # SeedVR2 only needs cv2; Impact already provides opencv-python-headless.
-  # Exclude torch/torchvision/opencv-python so provisioning cannot replace the
-  # CUDA-tested torch stack from the Vast image.
+  # SeedVR2: do not let extension requirements replace the CUDA-tested torch
+  # stack shipped by the Vast ComfyUI image.
   log "Installing SeedVR2 dependencies without replacing torch/CUDA"
-  awk '!/^(torch|torchvision|opencv-python)([<>= ].*)?$/' \
+  awk '!/^(torch|torchvision|torchaudio|opencv-python)([<>= ].*)?$/' \
     "$COMFY_ROOT/custom_nodes/ComfyUI-SeedVR2_VideoUpscaler/requirements.txt" \
     > "$STATE_ROOT/seedvr2-requirements.filtered.txt"
-  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet -r "$STATE_ROOT/seedvr2-requirements.filtered.txt"
+  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet \
+    -r "$STATE_ROOT/seedvr2-requirements.filtered.txt"
+
+  log "Installing VRGameDevGirl dependencies"
+  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet \
+    -r "$COMFY_ROOT/custom_nodes/comfyui-vrgamedevgirl/requirements.txt"
+
+  # These modules are imported by the package but are not all declared by its
+  # requirements.txt. Installing them here prevents a green deployment with a
+  # missing FastUnsharpSharpen node at request time.
+  "$PYTHON_BIN" -m pip install --no-cache-dir --quiet \
+    av imageio-ffmpeg transformers requests
+
+  # HumoAutomation imports torchaudio at package import time. Preserve the
+  # existing torch build; install only a matching torchaudio wheel if absent.
+  if ! "$PYTHON_BIN" -c 'import torchaudio' >/dev/null 2>&1; then
+    log "torchaudio missing; installing version matching existing torch"
+    TORCH_VERSION="$("$PYTHON_BIN" -c 'import torch; print(torch.__version__.split("+")[0])')"
+    "$PYTHON_BIN" -m pip install --no-cache-dir --quiet --no-deps \
+      "torchaudio==${TORCH_VERSION}"
+  fi
+
+  log "Validating VRGameDevGirl Python dependencies"
+  "$PYTHON_BIN" - <<'PYVRDEPS'
+import importlib
+
+required = [
+    "torch",
+    "torchaudio",
+    "numpy",
+    "kornia",
+    "librosa",
+    "imageio",
+    "imageio_ffmpeg",
+    "av",
+    "requests",
+    "transformers",
+]
+
+failed = []
+for name in required:
+    try:
+        module = importlib.import_module(name)
+        print(
+            f"[Rosely Zenith13] dependency OK: {name} "
+            f"{getattr(module, '__version__', 'unknown')}"
+        )
+    except Exception as exc:
+        failed.append((name, repr(exc)))
+
+if failed:
+    for name, error in failed:
+        print(f"[Rosely Zenith13] dependency FAILED: {name}: {error}")
+    raise SystemExit("VRGameDevGirl dependency validation failed")
+
+print("[Rosely Zenith13] VRGameDevGirl dependencies validated")
+PYVRDEPS
+
+  # Import the extension exactly enough to ensure the workflow node classes
+  # actually register. This catches dependency/import failures during
+  # provisioning rather than on the first paid request.
+  log "Validating FastUnsharpSharpen and FastFilmGrain registration"
+  PYTHONPATH="$COMFY_ROOT:${PYTHONPATH:-}" \
+    "$PYTHON_BIN" - "$COMFY_ROOT/custom_nodes/comfyui-vrgamedevgirl" <<'PYVRNODE'
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+init_file = root / "__init__.py"
+
+spec = importlib.util.spec_from_file_location(
+    "rosely_vrgamedevgirl",
+    init_file,
+    submodule_search_locations=[str(root)],
+)
+if spec is None or spec.loader is None:
+    raise SystemExit("Unable to create VRGameDevGirl module spec")
+
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+mappings = getattr(module, "NODE_CLASS_MAPPINGS", {})
+required_nodes = ["FastUnsharpSharpen", "FastFilmGrain"]
+missing = [name for name in required_nodes if name not in mappings]
+
+if missing:
+    raise SystemExit(
+        "VRGameDevGirl loaded but required nodes are missing: "
+        + ", ".join(missing)
+    )
+
+print("[Rosely Zenith13] FastUnsharpSharpen registered")
+print("[Rosely Zenith13] FastFilmGrain registered")
+print("[Rosely Zenith13] VRGameDevGirl node validation passed")
+PYVRNODE
 
   printf '%s' "$CUSTOM_NODE_SET_ID" > "$CUSTOM_NODES_MARKER"
 
   # If ComfyUI was already started while provisioning was running, restart it
-  # so the newly installed custom nodes are registered. On normal startup the
-  # service may not be running yet, in which case there is nothing to restart.
-  if command -v supervisorctl >/dev/null 2>&1 && supervisorctl status comfyui 2>/dev/null | grep -q RUNNING; then
+  # so the newly installed custom nodes are registered.
+  if command -v supervisorctl >/dev/null 2>&1 && \
+     supervisorctl status comfyui 2>/dev/null | grep -q RUNNING; then
     log "Restarting ComfyUI to load newly installed custom nodes"
     supervisorctl restart comfyui || fail "Failed to restart comfyui"
     sleep 5
@@ -219,13 +332,17 @@ else
   ACCESS_KEY="${AWS_ZIT_IMAGE_MODEL_ACCESS_KEY_ID:-}"
   SECRET_KEY="${AWS_ZIT_IMAGE_MODEL_SECRET_ACCESS_KEY:-}"
   SESSION_TOKEN="${AWS_ZIT_IMAGE_MODEL_SESSION_TOKEN:-}"
+
   [[ -n "$ACCESS_KEY" ]] || fail "AWS_ZIT_IMAGE_MODEL_ACCESS_KEY_ID is required"
   [[ -n "$SECRET_KEY" ]] || fail "AWS_ZIT_IMAGE_MODEL_SECRET_ACCESS_KEY is required"
 
-  export MODEL_S3_URI MODEL_ARCHIVE_SIZE AWS_ZIT_IMAGE_MODEL_S3_REGION MODEL_DOWNLOAD_CONCURRENCY MODEL_MULTIPART_CHUNK_MB
+  export MODEL_S3_URI MODEL_ARCHIVE_SIZE AWS_ZIT_IMAGE_MODEL_S3_REGION
+  export MODEL_DOWNLOAD_CONCURRENCY MODEL_MULTIPART_CHUNK_MB
   export MODEL_ARCHIVE_PATH="$ARCHIVE"
   export AWS_ZIT_IMAGE_MODEL_S3_ENDPOINT_URL="${AWS_ZIT_IMAGE_MODEL_S3_ENDPOINT_URL:-}"
-  export _ROSELY_ACCESS_KEY="$ACCESS_KEY" _ROSELY_SECRET_KEY="$SECRET_KEY" _ROSELY_SESSION_TOKEN="$SESSION_TOKEN"
+  export _ROSELY_ACCESS_KEY="$ACCESS_KEY"
+  export _ROSELY_SECRET_KEY="$SECRET_KEY"
+  export _ROSELY_SESSION_TOKEN="$SESSION_TOKEN"
 
   rm -f "$ARCHIVE" "$ARCHIVE.partial"
   rm -rf "$STAGING"
@@ -233,9 +350,12 @@ else
 
   log "Downloading verified model bundle from ${MODEL_S3_URI}"
   "$PYTHON_BIN" - <<'PYDOWNLOAD'
-import os, threading, time
+import os
+import threading
+import time
 from pathlib import Path
 from urllib.parse import urlparse
+
 import boto3
 from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
@@ -243,33 +363,55 @@ from botocore.config import Config
 u = urlparse(os.environ["MODEL_S3_URI"])
 if u.scheme != "s3" or not u.netloc or not u.path.lstrip("/"):
     raise SystemExit("MODEL_S3_URI must be s3://bucket/key")
-bucket, key = u.netloc, u.path.lstrip("/")
+
+bucket = u.netloc
+key = u.path.lstrip("/")
 dst = Path(os.environ["MODEL_ARCHIVE_PATH"])
 expected_size = int(os.environ["MODEL_ARCHIVE_SIZE"])
 region = os.environ.get("AWS_ZIT_IMAGE_MODEL_S3_REGION", "us-east-1")
 concurrency = int(os.environ.get("MODEL_DOWNLOAD_CONCURRENCY", "16"))
 chunk = int(os.environ.get("MODEL_MULTIPART_CHUNK_MB", "64")) * 1024 * 1024
 endpoint = os.environ.get("AWS_ZIT_IMAGE_MODEL_S3_ENDPOINT_URL") or None
+
 kwargs = dict(
     region_name=region,
     aws_access_key_id=os.environ["_ROSELY_ACCESS_KEY"],
     aws_secret_access_key=os.environ["_ROSELY_SECRET_KEY"],
-    config=Config(max_pool_connections=max(32, concurrency * 2), retries={"max_attempts": 10, "mode": "adaptive"}, connect_timeout=20, read_timeout=180),
+    config=Config(
+        max_pool_connections=max(32, concurrency * 2),
+        retries={"max_attempts": 10, "mode": "adaptive"},
+        connect_timeout=20,
+        read_timeout=180,
+    ),
 )
+
 if os.environ.get("_ROSELY_SESSION_TOKEN"):
     kwargs["aws_session_token"] = os.environ["_ROSELY_SESSION_TOKEN"]
 if endpoint:
     kwargs["endpoint_url"] = endpoint
+
 s3 = boto3.client("s3", **kwargs)
 head = s3.head_object(Bucket=bucket, Key=key)
 remote_size = int(head["ContentLength"])
 if remote_size != expected_size:
-    raise SystemExit(f"S3 size mismatch: expected {expected_size}, got {remote_size}")
+    raise SystemExit(
+        f"S3 size mismatch: expected {expected_size}, got {remote_size}"
+    )
 
-cfg = TransferConfig(multipart_threshold=chunk, multipart_chunksize=chunk, max_concurrency=concurrency, use_threads=True)
+cfg = TransferConfig(
+    multipart_threshold=chunk,
+    multipart_chunksize=chunk,
+    max_concurrency=concurrency,
+    use_threads=True,
+)
+
 tmp = Path(str(dst) + ".partial")
 tmp.unlink(missing_ok=True)
-lock = threading.Lock(); downloaded = 0; last = -1; started = time.monotonic()
+lock = threading.Lock()
+downloaded = 0
+last = -1
+started = time.monotonic()
+
 def progress(n):
     global downloaded, last
     with lock:
@@ -277,17 +419,25 @@ def progress(n):
         pct = int(downloaded * 100 / remote_size)
         if pct >= last + 1 or downloaded >= remote_size:
             mib_s = downloaded / max(time.monotonic() - started, 0.001) / 1024**2
-            print(f"[Rosely Zenith13] {pct:3d}% {downloaded/1024**3:.2f}/{remote_size/1024**3:.2f} GiB @ {mib_s:.1f} MiB/s", flush=True)
+            print(
+                f"[Rosely Zenith13] {pct:3d}% "
+                f"{downloaded/1024**3:.2f}/{remote_size/1024**3:.2f} GiB "
+                f"@ {mib_s:.1f} MiB/s",
+                flush=True,
+            )
             last = pct
+
 s3.download_file(bucket, key, str(tmp), Config=cfg, Callback=progress)
 if tmp.stat().st_size != expected_size:
     raise SystemExit("Downloaded archive size mismatch")
+
 tmp.replace(dst)
 PYDOWNLOAD
 
   log "Verifying archive SHA-256"
   ACTUAL_SHA="$(sha256sum "$ARCHIVE" | awk '{print $1}')"
-  [[ "$ACTUAL_SHA" == "$MODEL_ARCHIVE_SHA256" ]] || fail "Archive SHA-256 mismatch: $ACTUAL_SHA"
+  [[ "$ACTUAL_SHA" == "$MODEL_ARCHIVE_SHA256" ]] || \
+    fail "Archive SHA-256 mismatch: $ACTUAL_SHA"
 
   if ! command -v zstd >/dev/null 2>&1; then
     log "Installing zstd"
@@ -297,12 +447,14 @@ PYDOWNLOAD
   fi
 
   log "Extracting archive"
-  tar --no-same-owner --use-compress-program=zstd -xf "$ARCHIVE" -C "$STAGING"
+  tar --no-same-owner --use-compress-program=zstd \
+    -xf "$ARCHIVE" -C "$STAGING"
   [[ -d "$STAGING/models" ]] || fail "Archive does not contain models/ root"
 
   log "Validating required assets in bundle"
   file_count="$(find "$STAGING/models" -type f | wc -l | tr -d ' ')"
   log "Bundle contains ${file_count} model files"
+
   for rel in "${REQUIRED_ASSETS[@]}"; do
     [[ -s "$STAGING/$rel" ]] || fail "Missing/empty archive asset: $rel"
   done
@@ -321,8 +473,8 @@ PYDOWNLOAD
   rm -rf "$STAGING" "$ARCHIVE"
 fi
 
-# Install custom nodes after model extraction so Impact Pack sees our bundled SAM
-# checkpoint instead of downloading another copy.
+# Install custom nodes only after model extraction so the extensions see our
+# bundled checkpoints and do not need to fetch them at request time.
 install_custom_nodes
 
 log "Writing deterministic Zenith13 worker benchmark"
@@ -339,6 +491,7 @@ cat > "$BENCHMARK_JSON_PATH" <<'JSONBENCH'
   "9": {"inputs": {"filename_prefix": "benchmark-zenith13", "images": ["8", 0]}, "class_type": "SaveImage"}
 }
 JSONBENCH
+
 chmod 0644 "$BENCHMARK_JSON_PATH"
 mkdir -p "$(dirname "$WELLKNOWN_BENCHMARK")"
 cp -f "$BENCHMARK_JSON_PATH" "$WELLKNOWN_BENCHMARK"
@@ -348,6 +501,7 @@ log "Final asset validation"
 for rel in "${REQUIRED_ASSETS[@]}"; do
   ls -lh "$COMFY_ROOT/$rel"
 done
-log "custom nodes: Impact Pack + Impact Subpack + SeedVR2 installed"
+
+log "custom nodes: Impact Pack + Impact Subpack + SeedVR2 + VRGameDevGirl installed"
 log "benchmark = $BENCHMARK_JSON_PATH"
 log "Provisioning complete: Zenith 13 full bundle + Detailer/SeedVR2 assets"
