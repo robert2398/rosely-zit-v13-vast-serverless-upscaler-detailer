@@ -1,15 +1,20 @@
 # Backend integration
 
-All six modes use the same Vast Serverless endpoint and `/generate/sync` route.
+All eight modes use the same Vast Serverless endpoint and `/generate/sync` route.
 The backend chooses an API-format workflow and sends it in `input.workflow_json`.
 
-Available modes: `realistic`, `realistic_snapshot`, `realistic_amateur`,
-`anime_illustria`, `anime_modern`, `anime_elusarca`. The builder keeps `anime`
-as an alias for `anime_illustria`.
+Available modes: `realistic`, `realistic_male`, `realistic_trans`,
+`realistic_snapshot`, `realistic_amateur`, `anime_illustria`, `anime_modern`,
+`anime_elusarca`. The builder keeps `anime` as an alias for `anime_illustria`.
+
+`realistic_male` and `realistic_trans` both use the bundled
+`zpenis-zit-v1_5.safetensors` with different default strengths:
+- male: `0.60`
+- trans: `0.50`
 
 ```python
 workflow = build_zit_workflow(
-    mode="realistic_snapshot", prompt=final_prompt, request_id=request_id,
+    mode="realistic_male", prompt=final_prompt, request_id=request_id,
     seed=seed, width=width, height=height,
 )
 payload = {"input": {"request_id": request_id, "workflow_json": workflow}}

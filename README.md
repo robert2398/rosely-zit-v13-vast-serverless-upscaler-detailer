@@ -6,6 +6,7 @@ Zenith 13 deployment with Upscaler & Detailer using Vast ComfyUI Serverless + of
 - `Zenith_13.0_MXFP8_E4M3.safetensors`
 - `qwen/qwen_3_4b_fp8_mixed.safetensors`
 - `Flux/flux_vae.safetensors`
+- `zpenis-zit-v1_5.safetensors`
 - ComfyUI `vastai/comfy:v0.35.0-cuda-12.9-py312`
 - PyWorker `2207a3f94b55a0921c1641520eeb83de5a0c1611`
 - `COMFYUI_API_BASE=http://127.0.0.1:18188`
@@ -13,12 +14,12 @@ Zenith 13 deployment with Upscaler & Detailer using Vast ComfyUI Serverless + of
 
 ## Full model bundle
 ```text
-s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v2.tar.zst
-size: 16175243071 bytes
-sha256: d16d5d26ccf8428b5f4271dccdd5e6827bc441131bd78ad9f983c6653e6767c6
+s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v3.tar.zst
+size: 16309405103 bytes
+sha256: cfbd87e06b3b570c40c1436bea5cb31c0b1c70b772254d13791162f41df64fb7
 ```
 
-The bundle contains the Zenith/Qwen/VAE stack, existing LoRAs, SAM, Ultralytics face/hand/eye/person detector assets, and SeedVR2 7B Q4_K_M + FP16 VAE. Files on disk do not consume VRAM until a workflow loads them.
+The bundle contains the Zenith/Qwen/VAE stack, existing LoRAs, the ZPenis v1.5 Z-Image LoRA, SAM, Ultralytics face/hand/eye/person detector assets, and SeedVR2 7B Q4_K_M + FP16 VAE. Files on disk do not consume VRAM until a workflow loads them.
 
 Provisioning installs the complete `models/` tree and validates required assets instead of enforcing the old exact-eight-safetensors bundle contract.
 
@@ -46,6 +47,8 @@ Copy the remaining values from `endpoint-env.example`. Never commit real AWS or 
 
 ## Model modes currently present
 - `realistic` — no LoRA
+- `realistic_male` — ZPenis v1.5 @ `0.60`
+- `realistic_trans` — ZPenis v1.5 @ `0.50`
 - `realistic_snapshot` — optional legacy A/B mode
 - `realistic_amateur` — optional legacy A/B mode
 - `anime_illustria`
@@ -65,7 +68,9 @@ python -m compileall -q .
 ## Deployment smoke test
 1. Launch one Vast instance with the values from `endpoint-env.example`.
 2. Confirm archive size and SHA validation.
-3. Confirm all required model assets are present.
+3. Confirm all required model assets are present, including `zpenis-zit-v1_5.safetensors`.
 4. Confirm pinned custom nodes install without changing the Vast CUDA/PyTorch stack.
 5. Confirm wrapper `/health` returns 200.
-6. Run the baseline realistic generation before testing optional detailer/upscaler flows.
+6. Run baseline female realistic generation first.
+7. Run `realistic_male`, then `realistic_trans`.
+8. Test the existing upscaler/detailer flow after the base ZiT generation.

@@ -10,9 +10,9 @@ PROVISIONING_SCRIPT=https://raw.githubusercontent.com/robert2398/rosely-zit-v13-
 COMFYUI_API_BASE=http://127.0.0.1:18188
 
 # Full Zenith 13 + LoRA + Detailer + SeedVR2 bundle
-MODEL_S3_URI=s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v2.tar.zst
-MODEL_ARCHIVE_SHA256=d16d5d26ccf8428b5f4271dccdd5e6827bc441131bd78ad9f983c6653e6767c6
-MODEL_ARCHIVE_SIZE=16175243071
+MODEL_S3_URI=s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v3.tar.zst
+MODEL_ARCHIVE_SHA256=cfbd87e06b3b570c40c1436bea5cb31c0b1c70b772254d13791162f41df64fb7
+MODEL_ARCHIVE_SIZE=16309405103
 AWS_ZIT_IMAGE_MODEL_S3_REGION=us-east-1
 AWS_ZIT_IMAGE_MODEL_ACCESS_KEY_ID=REPLACE_ME
 AWS_ZIT_IMAGE_MODEL_SECRET_ACCESS_KEY=REPLACE_ME

@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Literal
 
 WorkflowMode = Literal[
-    "realistic", "realistic_snapshot", "realistic_amateur",
+    "realistic", "realistic_male", "realistic_trans",
+    "realistic_snapshot", "realistic_amateur",
     "anime_illustria", "anime_modern", "anime_elusarca",
 ]
 WORKFLOW_DIR = Path(__file__).resolve().parent.parent / "workflows"
 MODE_TO_FILE = {
     "realistic": "zit_realistic.json",
+    "realistic_male": "zit_realistic_male.json",
+    "realistic_trans": "zit_realistic_trans.json",
     "realistic_snapshot": "zit_realistic_snapshot.json",
     "realistic_amateur": "zit_realistic_amateur.json",
     "anime_illustria": "zit_anime_illustria.json",

@@ -30,9 +30,9 @@ PROVISIONING_SCRIPT=https://raw.githubusercontent.com/robert2398/rosely-zit-v13-
 COMFYUI_API_BASE=http://127.0.0.1:18188
 
 Model bundle:
-s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v2.tar.zst
-SHA-256: d16d5d26ccf8428b5f4271dccdd5e6827bc441131bd78ad9f983c6653e6767c6
-Size: 16175243071 bytes
+s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v3.tar.zst
+SHA-256: cfbd87e06b3b570c40c1436bea5cb31c0b1c70b772254d13791162f41df64fb7
+Size: 16309405103 bytes
 
 Bundle additionally contains:
 - SAM ViT-B
@@ -40,6 +40,7 @@ Bundle additionally contains:
 - person segmentation detector
 - SeedVR2 7B Q4_K_M DiT
 - SeedVR2 FP16 VAE
+- ZPenis v1.5 Z-Image LoRA (`zpenis-zit-v1_5.safetensors`)
 
 Provisioning installs pinned:
 - ComfyUI-Impact-Pack @ 429d0159ad429e64d2b3916e6e7be9c22d025c3c

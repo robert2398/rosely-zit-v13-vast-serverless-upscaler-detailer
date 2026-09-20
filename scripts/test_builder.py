@@ -7,7 +7,8 @@ sys.path.insert(0, str(ROOT))
 from backend_example.zit_unified_workflow import build_zit_workflow
 
 modes = [
-    "realistic", "realistic_snapshot", "realistic_amateur",
+    "realistic", "realistic_male", "realistic_trans",
+    "realistic_snapshot", "realistic_amateur",
     "anime_illustria", "anime_modern", "anime_elusarca",
 ]
 for mode in modes:
@@ -25,6 +26,22 @@ assert wf["10"]["class_type"] == "LoraLoaderModelOnly"
 assert wf["10"]["inputs"]["lora_name"] == "z-image-illustria-01.safetensors"
 assert wf["10"]["inputs"]["strength_model"] == 1.1
 assert "clip" not in wf["10"]["inputs"] and "strength_clip" not in wf["10"]["inputs"]
+
+male = build_zit_workflow(
+    mode="realistic_male", prompt="adult male portrait",
+    request_id="male-test", seed=42,
+)
+assert male["10"]["inputs"]["lora_name"] == "zpenis-zit-v1_5.safetensors"
+assert male["10"]["inputs"]["strength_model"] == 0.60
+assert male["7"]["inputs"]["model"] == ["10", 0]
+
+trans = build_zit_workflow(
+    mode="realistic_trans", prompt="adult trans woman portrait",
+    request_id="trans-test", seed=42,
+)
+assert trans["10"]["inputs"]["lora_name"] == "zpenis-zit-v1_5.safetensors"
+assert trans["10"]["inputs"]["strength_model"] == 0.50
+assert trans["7"]["inputs"]["model"] == ["10", 0]
 
 # Builder must deep-copy templates, never mutate the cached template.
 a = build_zit_workflow(mode="realistic", prompt="first", request_id="a", seed=1)

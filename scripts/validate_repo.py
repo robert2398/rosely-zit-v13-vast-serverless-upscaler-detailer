@@ -8,14 +8,16 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL = "Zenith_13.0_MXFP8_E4M3.safetensors"
 CLIP = "qwen/qwen_3_4b_fp8_mixed.safetensors"
 VAE = "Flux/flux_vae.safetensors"
-ARCHIVE_URI = "s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v2.tar.zst"
-ARCHIVE_SHA = "d16d5d26ccf8428b5f4271dccdd5e6827bc441131bd78ad9f983c6653e6767c6"
-ARCHIVE_SIZE = "16175243071"
+ARCHIVE_URI = "s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v3.tar.zst"
+ARCHIVE_SHA = "cfbd87e06b3b570c40c1436bea5cb31c0b1c70b772254d13791162f41df64fb7"
+ARCHIVE_SIZE = "16309405103"
 PYWORKER_REF = "2207a3f94b55a0921c1641520eeb83de5a0c1611"
 PROVISIONING_URL = "https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh"
 
 EXPECTED = {
     "zit_realistic.json": None,
+    "zit_realistic_male.json": ("zpenis-zit-v1_5.safetensors", 0.60),
+    "zit_realistic_trans.json": ("zpenis-zit-v1_5.safetensors", 0.50),
     "zit_realistic_snapshot.json": ("RealisticSnapshot-Zimage-Turbov5.safetensors", 0.60),
     "zit_realistic_amateur.json": ("deedee_amateur_photography_zimage_base_and_turbo_v1.safetensors", 0.60),
     "zit_anime_illustria.json": ("z-image-illustria-01.safetensors", 0.70),
@@ -77,6 +79,7 @@ for required in (
     ARCHIVE_URI,
     ARCHIVE_SIZE,
     ARCHIVE_SHA,
+    "models/loras/zpenis-zit-v1_5.safetensors",
     "models/sams/sam_vit_b_01ec64.pth",
     "models/ultralytics/bbox/face_yolov8m.pt",
     "models/seedvr2/seedvr2_ema_7b-Q4_K_M.gguf",
@@ -106,7 +109,8 @@ assert ARCHIVE_URI in settings
 
 print("OK: Zenith13 repo validation passed")
 print("  - workflows validated")
-print("  - full bundle URI/size/SHA pin validated")
+print("  - v3 bundle URI/size/SHA pin validated")
+print("  - ZPenis asset validated in provisioner")
 print("  - Detailer + SeedVR2 assets validated in provisioner")
 print("  - pinned custom-node installers validated")
 print("  - COMFYUI_API_BASE direct backend override validated")
