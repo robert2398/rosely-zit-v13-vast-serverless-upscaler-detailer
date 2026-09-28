@@ -7,8 +7,9 @@ Zenith 13 deployment with Upscaler & Detailer using Vast ComfyUI Serverless + of
 - `qwen/qwen_3_4b_fp8_mixed.safetensors`
 - `Flux/flux_vae.safetensors`
 - `zpenis-zit-v1_5.safetensors`
-- ComfyUI `vastai/comfy:v0.35.0-cuda-12.9-py312`
+- ComfyUI `vastai/comfy@sha256:f3221c99b2079935d2714be228e56251f9913ca32433f0e40a27632b1510858c` (tag source: `v0.35.0-cuda-12.9-py312`)
 - PyWorker `2207a3f94b55a0921c1641520eeb83de5a0c1611`
+- ai-dock API wrapper `e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88` + `rosely-wrapper-hardening-v2`
 - `COMFYUI_API_BASE=http://127.0.0.1:18188`
 - 12 steps, CFG 1.0, `dpmpp_sde`, `simple`
 
@@ -23,6 +24,17 @@ The bundle contains the Zenith/Qwen/VAE stack, existing LoRAs, the ZPenis v1.5 Z
 
 Provisioning installs the complete `models/` tree and validates required assets instead of enforcing the old exact-eight-safetensors bundle contract.
 
+## Wrapper recovery and output lifecycle
+
+Provisioning fails closed unless the image contains the reviewed API-wrapper commit, then applies a SHA-pinned, idempotent patch that:
+
+- fixes the cancelled-request double `task_done()` crash;
+- makes unexpected worker-orchestrator exit terminate the wrapper so Supervisor restarts it;
+- exposes worker counts, generation queue depth, active request/stage, and last start/completion timestamps in `/health` and returns 503 for worker-pool loss;
+- verifies uploaded S3 object size, invalidates the exact ComfyUI history entry, and deletes local outputs only after S3 and any requested base64 output are complete.
+
+Supervisor also runs a deep-health watchdog and a conservative output sweeper. The watchdog restarts only `api-wrapper`, with debounce, cooldown, and a rolling restart limit. The sweeper deletes only request directories containing a verified-upload marker; unmarked artifacts are retained and reported. Repeated local recovery failure emits `external_reboot_required` for an AWS-side recovery service—it does not keep a Vast credential in this image.
+
 ## Optional custom-node stacks
 Provisioning pins and installs:
 - `ltdrdata/ComfyUI-Impact-Pack` @ `429d0159ad429e64d2b3916e6e7be9c22d025c3c`
@@ -33,7 +45,7 @@ These enable the bundled face-detailer and SeedVR2 assets when those workflows a
 
 ## Vast template
 ```text
-Docker image: vastai/comfy:v0.35.0-cuda-12.9-py312
+Docker image: vastai/comfy@sha256:f3221c99b2079935d2714be228e56251f9913ca32433f0e40a27632b1510858c
 SERVERLESS=true
 BACKEND=comfyui-json
 PYWORKER_REPO=https://github.com/vast-ai/pyworker
@@ -41,6 +53,7 @@ PYWORKER_REF=2207a3f94b55a0921c1641520eeb83de5a0c1611
 BENCHMARK_JSON_PATH=/workspace/zenith13_benchmark.json
 PROVISIONING_SCRIPT=https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh
 COMFYUI_API_BASE=http://127.0.0.1:18188
+API_WRAPPER_REF=e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88
 ```
 
 Copy the remaining values from `endpoint-env.example`. Never commit real AWS or Docker credentials.
@@ -62,6 +75,7 @@ The full bundle intentionally keeps optional assets even when they are not used 
 bash -n provision_vast_zit_unified.sh
 python scripts/validate_repo.py
 python scripts/test_builder.py
+python scripts/test_runtime.py
 python -m compileall -q .
 ```
 
@@ -70,7 +84,9 @@ python -m compileall -q .
 2. Confirm archive size and SHA validation.
 3. Confirm all required model assets are present, including `zpenis-zit-v1_5.safetensors`.
 4. Confirm pinned custom nodes install without changing the Vast CUDA/PyTorch stack.
-5. Confirm wrapper `/health` returns 200.
+5. Confirm wrapper `/health` returns 200 and reports `orchestrator_alive=true` and `generation_workers_alive == generation_workers_expected`.
 6. Run baseline female realistic generation first.
 7. Run `realistic_male`, then `realistic_trans`.
 8. Test the existing upscaler/detailer flow after the base ZiT generation.
+9. Cancel a queued request, then confirm the next request completes and the generation worker remains alive.
+10. Confirm S3-verified output files and their root symlinks are removed while unverified files are retained.

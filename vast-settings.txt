@@ -2,7 +2,8 @@ VAST SERVERLESS SETTINGS — ZENITH 13 MXFP8 FULL BUNDLE
 ======================================================
 Endpoint name: rosely-image-zit-unified-vast
 Recommended template: ComfyUI (Serverless)
-Docker image: vastai/comfy:v0.35.0-cuda-12.9-py312
+Docker image: vastai/comfy@sha256:f3221c99b2079935d2714be228e56251f9913ca32433f0e40a27632b1510858c
+Source tag: vastai/comfy:v0.35.0-cuda-12.9-py312
 Storage: 100 GB recommended
 GPU count: 1
 VRAM: >=24 GB (48 GB preferred when SeedVR2/detailers are used heavily)
@@ -17,7 +18,7 @@ Minimum cold load: 0
 Cold multiplier: 0
 Target utilization: 0.90
 Inactivity timeout: -1
-Max queue time: 1800
+Max queue time: 120
 Target queue time: 10
 
 Required env:
@@ -28,6 +29,7 @@ PYWORKER_REF=2207a3f94b55a0921c1641520eeb83de5a0c1611
 BENCHMARK_JSON_PATH=/workspace/zenith13_benchmark.json
 PROVISIONING_SCRIPT=https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh
 COMFYUI_API_BASE=http://127.0.0.1:18188
+API_WRAPPER_REF=e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88
 
 Model bundle:
 s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v3.tar.zst

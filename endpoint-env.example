@@ -9,6 +9,23 @@ PROVISIONING_SCRIPT=https://raw.githubusercontent.com/robert2398/rosely-zit-v13-
 # IMPORTANT: ai-dock API wrapper must target direct ComfyUI, not the 8188 edge/Caddy port.
 COMFYUI_API_BASE=http://127.0.0.1:18188
 
+# ai-dock wrapper source is verified before Rosely's idempotent hardening patch
+# is applied. Provisioning fails closed if the image contains another revision.
+API_WRAPPER_REF=e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88
+
+# Wrapper-only recovery. The watchdog never restarts ComfyUI or downloads models.
+ROSELY_WATCHDOG_POLL_SECONDS=10
+ROSELY_WATCHDOG_FAILURE_THRESHOLD=3
+ROSELY_WATCHDOG_RESTART_COOLDOWN_SECONDS=120
+ROSELY_WATCHDOG_RESTART_WINDOW_SECONDS=900
+ROSELY_WATCHDOG_MAX_RESTARTS_PER_WINDOW=3
+ROSELY_WATCHDOG_READINESS_TIMEOUT_SECONDS=90
+
+# Verified-output cleanup. Unmarked artifacts are retained and alerted on.
+ROSELY_SWEEPER_INTERVAL_SECONDS=300
+ROSELY_SWEEPER_GRACE_SECONDS=1800
+ROSELY_SWEEPER_UNMARKED_ALERT_SECONDS=86400
+
 # Full Zenith 13 + LoRA + Detailer + SeedVR2 bundle
 MODEL_S3_URI=s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mxfp8-full-detailer-seedvr2-v3.tar.zst
 MODEL_ARCHIVE_SHA256=cfbd87e06b3b570c40c1436bea5cb31c0b1c70b772254d13791162f41df64fb7

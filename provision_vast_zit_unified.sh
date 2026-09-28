@@ -28,6 +28,17 @@ CUSTOM_NODES_MARKER="${STATE_ROOT}/custom-nodes.refs"
 BENCHMARK_JSON_PATH="${BENCHMARK_JSON_PATH:-/workspace/zenith13_benchmark.json}"
 WELLKNOWN_BENCHMARK="/opt/comfyui-api-wrapper/workflows/pyworker_benchmark.json"
 
+# The Vast image currently installs the wrapper from an unpinned Git clone.
+# Fail closed unless the installed source is the exact revision reviewed and
+# tested by Rosely, then apply our idempotent local hardening patch.
+API_WRAPPER_ROOT="${API_WRAPPER_ROOT:-/opt/comfyui-api-wrapper}"
+API_WRAPPER_REF="${API_WRAPPER_REF:-e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88}"
+ROSELY_RUNTIME_BASE_URL="${ROSELY_RUNTIME_BASE_URL:-https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/runtime}"
+ROSELY_RUNTIME_ROOT="${ROSELY_RUNTIME_ROOT:-/opt/rosely}"
+API_WRAPPER_PATCHER_SHA256="e8043245649b143982819fab77d4874a0c779c9be5c50a7ae80f5c35d40d79af"
+API_WRAPPER_WATCHDOG_SHA256="07cd720d45ed7402c732cd20220dff3b95453bf132026c95becc9bb8edea2e86"
+OUTPUT_SWEEPER_SHA256="07ab2664a898c8407a832e1cb16d031633cb946df727eaaade4582fed248bb95"
+
 # Pinned custom-node revisions used by the Detailer / SeedVR2 pipeline.
 IMPACT_PACK_REPO="${IMPACT_PACK_REPO:-https://github.com/ltdrdata/ComfyUI-Impact-Pack.git}"
 IMPACT_PACK_REF="${IMPACT_PACK_REF:-429d0159ad429e64d2b3916e6e7be9c22d025c3c}"
@@ -106,7 +117,7 @@ if major < 10:
 PYRUNTIME
 
 patch_api_wrapper_s3_env_aliases(){
-  local wrapper_root="${API_WRAPPER_ROOT:-/opt/comfyui-api-wrapper}"
+  local wrapper_root="$API_WRAPPER_ROOT"
   local cfg="${wrapper_root}/config/config.py"
   local req="${wrapper_root}/requestmodels/models.py"
 
@@ -150,13 +161,117 @@ PYPATCH
   grep -q 'AWS_ZIT_IMAGE_ACCESS_KEY_ID' "$req" || fail "AWS_ZIT_IMAGE_ACCESS_KEY_ID patch missing from $req"
   grep -q 'AWS_ZIT_IMAGE_S3_BUCKET_NAME' "$req" || fail "AWS_ZIT_IMAGE_S3_BUCKET_NAME patch missing from $req"
   log "API wrapper AWS_ZIT_IMAGE_* patch verified"
+}
 
-  if command -v supervisorctl >/dev/null 2>&1; then
-    log "Restarting api-wrapper"
-    supervisorctl restart api-wrapper || fail "Failed to restart api-wrapper"
-    sleep 3
-    supervisorctl status api-wrapper || true
-  fi
+download_verified_runtime_asset(){
+  local name="$1" expected_sha="$2" destination="$3"
+  local temporary="${destination}.partial"
+
+  command -v curl >/dev/null 2>&1 || fail "curl is required to install Rosely runtime assets"
+  mkdir -p "$(dirname "$destination")"
+  rm -f "$temporary"
+  curl --fail --location --silent --show-error \
+    "${ROSELY_RUNTIME_BASE_URL}/${name}" \
+    --output "$temporary"
+
+  local actual_sha
+  actual_sha="$(sha256sum "$temporary" | awk '{print $1}')"
+  [[ "$actual_sha" == "$expected_sha" ]] || \
+    fail "Runtime asset SHA-256 mismatch for ${name}: expected ${expected_sha}, got ${actual_sha}"
+
+  install -m 0755 "$temporary" "$destination"
+  rm -f "$temporary"
+  log "Installed verified runtime asset ${name} (${actual_sha})"
+}
+
+patch_api_wrapper_runtime(){
+  local patcher="${ROSELY_RUNTIME_ROOT}/libexec/patch_api_wrapper.py"
+  [[ -d "$API_WRAPPER_ROOT/.git" ]] || fail "API wrapper Git metadata missing: $API_WRAPPER_ROOT/.git"
+
+  download_verified_runtime_asset \
+    "patch_api_wrapper.py" \
+    "$API_WRAPPER_PATCHER_SHA256" \
+    "$patcher"
+
+  log "Applying pinned API wrapper correctness, liveness, and cleanup patch"
+  "$PYTHON_BIN" "$patcher" "$API_WRAPPER_ROOT" "$API_WRAPPER_REF"
+  "$PYTHON_BIN" -m py_compile \
+    "$API_WRAPPER_ROOT/main.py" \
+    "$API_WRAPPER_ROOT/workers/generation_worker.py" \
+    "$API_WRAPPER_ROOT/workers/postprocess_worker.py"
+
+  printf '%s\n' "$API_WRAPPER_REF" > "${STATE_ROOT}/api-wrapper.source-ref"
+  printf '%s\n' "rosely-wrapper-hardening-v2" > "${STATE_ROOT}/api-wrapper.patch-version"
+  log "API wrapper source and Rosely patch verified"
+}
+
+install_supervisor_recovery_services(){
+  local watchdog="${ROSELY_RUNTIME_ROOT}/bin/api-wrapper-watchdog"
+  local sweeper="${ROSELY_RUNTIME_ROOT}/bin/output-sweeper"
+  local api_wrapper_conf="/etc/supervisor/conf.d/api-wrapper.conf"
+
+  command -v supervisorctl >/dev/null 2>&1 || fail "supervisorctl is required"
+  [[ -f "$api_wrapper_conf" ]] || fail "Supervisor api-wrapper config missing: $api_wrapper_conf"
+  grep -Eq '^autorestart=(unexpected|true)$' "$api_wrapper_conf" || \
+    fail "api-wrapper Supervisor config must autorestart unexpected exits"
+
+  download_verified_runtime_asset \
+    "api_wrapper_watchdog.py" \
+    "$API_WRAPPER_WATCHDOG_SHA256" \
+    "$watchdog"
+  download_verified_runtime_asset \
+    "output_sweeper.py" \
+    "$OUTPUT_SWEEPER_SHA256" \
+    "$sweeper"
+
+  cat > /etc/supervisor/conf.d/api-wrapper-watchdog.conf <<EOF
+[program:api-wrapper-watchdog]
+environment=PROC_NAME="%(program_name)s",PYTHONUNBUFFERED="1"
+command=${PYTHON_BIN} ${watchdog}
+autostart=true
+autorestart=true
+startsecs=5
+startretries=20
+stopasgroup=true
+killasgroup=true
+stopsignal=TERM
+stopwaitsecs=10
+stdout_logfile=/dev/stdout
+redirect_stderr=true
+stdout_events_enabled=true
+stdout_logfile_maxbytes=0
+stdout_logfile_backups=0
+EOF
+
+  cat > /etc/supervisor/conf.d/output-sweeper.conf <<EOF
+[program:output-sweeper]
+environment=PROC_NAME="%(program_name)s",PYTHONUNBUFFERED="1"
+command=${PYTHON_BIN} ${sweeper}
+autostart=true
+autorestart=true
+startsecs=5
+startretries=20
+stopasgroup=true
+killasgroup=true
+stopsignal=TERM
+stopwaitsecs=10
+stdout_logfile=/dev/stdout
+redirect_stderr=true
+stdout_events_enabled=true
+stdout_logfile_maxbytes=0
+stdout_logfile_backups=0
+EOF
+
+  log "Reloading Supervisor configuration"
+  supervisorctl reread || fail "Supervisor reread failed"
+  supervisorctl update || fail "Supervisor update failed"
+
+  log "Restarting patched api-wrapper only (ComfyUI remains loaded)"
+  supervisorctl restart api-wrapper || fail "Failed to restart api-wrapper"
+  supervisorctl start api-wrapper-watchdog >/dev/null 2>&1 || true
+  supervisorctl start output-sweeper >/dev/null 2>&1 || true
+  sleep 3
+  supervisorctl status api-wrapper api-wrapper-watchdog output-sweeper || true
 }
 
 install_git_node(){
@@ -321,8 +436,9 @@ PYVRNODE
 }
 
 log "Configuring generated-image S3 environment"
-patch_api_wrapper_s3_env_aliases
 mkdir -p "$STATE_ROOT"
+patch_api_wrapper_runtime
+patch_api_wrapper_s3_env_aliases
 
 if models_ready; then
   log "Exact full Zenith13 bundle already installed; skipping model download"
@@ -523,6 +639,9 @@ for rel in "${REQUIRED_ASSETS[@]}"; do
   ls -lh "$COMFY_ROOT/$rel"
 done
 
+install_supervisor_recovery_services
+
 log "custom nodes: Impact Pack + Impact Subpack + SeedVR2 + VRGameDevGirl installed"
 log "benchmark = $BENCHMARK_JSON_PATH"
-log "Provisioning complete: Zenith 13 full bundle + Detailer/SeedVR2 assets"
+log "API wrapper = ${API_WRAPPER_REF} + rosely-wrapper-hardening-v2"
+log "Provisioning complete: Zenith 13 full bundle + Detailer/SeedVR2 assets + wrapper self-healing"

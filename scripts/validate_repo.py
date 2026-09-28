@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,7 +13,10 @@ ARCHIVE_URI = "s3://rosely-infrastructure/serverless/zimage/zenith13/zenith13-mx
 ARCHIVE_SHA = "cfbd87e06b3b570c40c1436bea5cb31c0b1c70b772254d13791162f41df64fb7"
 ARCHIVE_SIZE = "16309405103"
 PYWORKER_REF = "2207a3f94b55a0921c1641520eeb83de5a0c1611"
+API_WRAPPER_REF = "e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88"
+PATCH_VERSION = "rosely-wrapper-hardening-v2"
 PROVISIONING_URL = "https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh"
+BASE_IMAGE = "vastai/comfy@sha256:f3221c99b2079935d2714be228e56251f9913ca32433f0e40a27632b1510858c"
 
 EXPECTED = {
     "zit_realistic.json": None,
@@ -87,6 +91,11 @@ for required in (
     "ComfyUI-Impact-Subpack",
     "ComfyUI-SeedVR2_VideoUpscaler",
     "pyworker_benchmark.json",
+    API_WRAPPER_REF,
+    PATCH_VERSION,
+    "api-wrapper-watchdog.conf",
+    "output-sweeper.conf",
+    "supervisorctl restart api-wrapper",
 ):
     assert required in prov, required
 assert "Expected 8 safetensors" not in prov
@@ -98,14 +107,59 @@ assert f"PYWORKER_REF={PYWORKER_REF}" in endpoint_env
 assert "BENCHMARK_JSON_PATH=/workspace/zenith13_benchmark.json" in endpoint_env
 assert f"PROVISIONING_SCRIPT={PROVISIONING_URL}" in endpoint_env
 assert "COMFYUI_API_BASE=http://127.0.0.1:18188" in endpoint_env
+assert f"API_WRAPPER_REF={API_WRAPPER_REF}" in endpoint_env
 assert f"MODEL_S3_URI={ARCHIVE_URI}" in endpoint_env
 assert f"MODEL_ARCHIVE_SHA256={ARCHIVE_SHA}" in endpoint_env
 assert f"MODEL_ARCHIVE_SIZE={ARCHIVE_SIZE}" in endpoint_env
 
 settings = (ROOT / "vast-settings.txt").read_text()
-assert "vastai/comfy:v0.35.0-cuda-12.9-py312" in settings
+assert BASE_IMAGE in settings
 assert "COMFYUI_API_BASE=http://127.0.0.1:18188" in settings
 assert ARCHIVE_URI in settings
+assert "Max queue time: 120" in settings
+assert f"API_WRAPPER_REF={API_WRAPPER_REF}" in settings
+
+runtime_hashes = {
+    "patch_api_wrapper.py": "e8043245649b143982819fab77d4874a0c779c9be5c50a7ae80f5c35d40d79af",
+    "api_wrapper_watchdog.py": "07cd720d45ed7402c732cd20220dff3b95453bf132026c95becc9bb8edea2e86",
+    "output_sweeper.py": "07ab2664a898c8407a832e1cb16d031633cb946df727eaaade4582fed248bb95",
+}
+for name, expected_sha in runtime_hashes.items():
+    content = (ROOT / "runtime" / name).read_bytes()
+    assert hashlib.sha256(content).hexdigest() == expected_sha, name
+    assert expected_sha in prov, name
+
+patcher = (ROOT / "runtime" / "patch_api_wrapper.py").read_text(encoding="utf-8")
+for required in (
+    "single-owner-generation-task-done",
+    "supervised-worker-liveness",
+    "generation_workers_expected",
+    "generation_queue_depth",
+    "generation_activity",
+    "head_object",
+    "COMFYUI_API_HISTORY",
+    "Deleted verified local outputs",
+):
+    assert required in patcher, required
+
+watchdog = (ROOT / "runtime" / "api_wrapper_watchdog.py").read_text(encoding="utf-8")
+for required in (
+    "generation_workers_expected",
+    "generation_workers_alive",
+    "orchestrator_alive",
+    "external_reboot_required",
+    '["supervisorctl", "restart", "api-wrapper"]',
+):
+    assert required in watchdog, required
+
+sweeper = (ROOT / "runtime" / "output_sweeper.py").read_text(encoding="utf-8")
+for required in (
+    ".rosely-upload-complete.json",
+    "upload_verified",
+    "disk_severity",
+    "old_unmarked_files",
+):
+    assert required in sweeper, required
 
 print("OK: Zenith13 repo validation passed")
 print("  - workflows validated")
@@ -115,4 +169,6 @@ print("  - Detailer + SeedVR2 assets validated in provisioner")
 print("  - pinned custom-node installers validated")
 print("  - COMFYUI_API_BASE direct backend override validated")
 print("  - Vast official pyworker pin validated")
+print("  - API wrapper source/patch and runtime SHA pins validated")
+print("  - deep-health watchdog and verified-output cleanup validated")
 print("  - no custom worker.py/model_server.py")
