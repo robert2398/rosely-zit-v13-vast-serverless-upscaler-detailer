@@ -14,7 +14,7 @@ ARCHIVE_SHA = "cfbd87e06b3b570c40c1436bea5cb31c0b1c70b772254d13791162f41df64fb7"
 ARCHIVE_SIZE = "16309405103"
 PYWORKER_REF = "2207a3f94b55a0921c1641520eeb83de5a0c1611"
 API_WRAPPER_REF = "e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88"
-PATCH_VERSION = "rosely-wrapper-hardening-v2"
+PATCH_VERSION = "rosely-wrapper-hardening-v3"
 PROVISIONING_URL = "https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh"
 BASE_IMAGE = "vastai/comfy@sha256:f3221c99b2079935d2714be228e56251f9913ca32433f0e40a27632b1510858c"
 
@@ -120,7 +120,7 @@ assert "Max queue time: 120" in settings
 assert f"API_WRAPPER_REF={API_WRAPPER_REF}" in settings
 
 runtime_hashes = {
-    "patch_api_wrapper.py": "e8043245649b143982819fab77d4874a0c779c9be5c50a7ae80f5c35d40d79af",
+    "patch_api_wrapper.py": "f8384ae822107758fe261f8a67af9554c6090d9a0614f73a6b5055ddf50e5b5b",
     "api_wrapper_watchdog.py": "07cd720d45ed7402c732cd20220dff3b95453bf132026c95becc9bb8edea2e86",
     "output_sweeper.py": "07ab2664a898c8407a832e1cb16d031633cb946df727eaaade4582fed248bb95",
 }

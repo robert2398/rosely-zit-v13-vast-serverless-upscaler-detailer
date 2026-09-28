@@ -5,22 +5,24 @@ from __future__ import annotations
 
 import argparse
 import ast
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 
-PATCH_VERSION = "rosely-wrapper-hardening-v2"
+PATCH_VERSION = "rosely-wrapper-hardening-v3"
 
 
 def replace_once(path: Path, old: str, new: str, marker: str) -> None:
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     if marker in text:
         print(f"[{PATCH_VERSION}] already patched: {path}")
         return
     count = text.count(old)
     if count != 1:
-        raise SystemExit(f"Expected exactly one source block in {path}, found {count}; refusing version drift")
-    path.write_text(text.replace(old, new, 1))
+        raise SystemExit(f"Expected exactly one source block for {marker} in {path}, found {count}; refusing version drift")
+    path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
     print(f"[{PATCH_VERSION}] patched: {path}")
 
 
@@ -257,30 +259,13 @@ def patch_postprocess_worker(root: Path) -> None:
 '''
     replace_once(path, old_import, new_import, "COMFYUI_API_HISTORY,")
 
-    old_flow = '''                    # Handle S3 upload - check payload first, then environment variables
-                    s3_config = await self.get_s3_config(request.input)
-                    if s3_config:
-                        await self.upload_assets(request_id, s3_config, result)
-                    else:
-                        logger.info(f"No S3 configuration found for {request_id}, skipping upload")
-
-                    # Optionally inline outputs as base64 â€” coexists
-                    # with S3 (both `data` and `url` populated when
-                    # both are configured).
-                    if getattr(request.input, 'return_outputs_as_base64', False):
+    # Match executable statements only. The previous patch included a
+    # misencoded em dash from the upstream comment and failed on the pinned
+    # revision before provisioning could reach the model bundle download.
+    old_flow = '''                    if getattr(request.input, 'return_outputs_as_base64', False):
                         await self.inline_outputs_as_base64(request_id, result)
 '''
-    new_flow = '''                    # Handle S3 upload - check payload first, then environment variables
-                    s3_config = await self.get_s3_config(request.input)
-                    if s3_config:
-                        await self.upload_assets(request_id, s3_config, result)
-                    else:
-                        logger.info(f"No S3 configuration found for {request_id}, skipping upload")
-
-                    # Optionally inline outputs as base64 â€” coexists
-                    # with S3 (both `data` and `url` populated when
-                    # both are configured).
-                    return_base64 = getattr(request.input, 'return_outputs_as_base64', False)
+    new_flow = '''                    return_base64 = getattr(request.input, 'return_outputs_as_base64', False)
                     if return_base64:
                         await self.inline_outputs_as_base64(request_id, result)
 
@@ -502,7 +487,7 @@ def patch_postprocess_worker(root: Path) -> None:
 def verify_queue_accounting(root: Path) -> None:
     """Fail provisioning unless GenerationWorker.work has one queue acknowledgement."""
     path = root / "workers" / "generation_worker.py"
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     work_method = None
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == "GenerationWorker":
@@ -536,6 +521,32 @@ def verify_queue_accounting(root: Path) -> None:
     print(f"[{PATCH_VERSION}] verified single-owner generation queue acknowledgement")
 
 
+def apply_patches(root: Path) -> None:
+    """Validate the complete patch on copies before modifying installed files.
+
+    Copies start from the current files so retries can finish a partially
+    applied v2 patch without resetting other provisioner changes.
+    """
+    targets = ("main.py", "workers/generation_worker.py", "workers/postprocess_worker.py")
+    with tempfile.TemporaryDirectory(prefix="rosely-wrapper-patch-") as raw_staging:
+        staging = Path(raw_staging)
+        for relative in targets:
+            destination = staging / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(root / relative, destination)
+        patch_generation_worker(staging)
+        patch_main(staging)
+        patch_postprocess_worker(staging)
+        verify_queue_accounting(staging)
+        for relative in targets:
+            source = (staging / relative).read_text(encoding="utf-8")
+            compile(source, str(root / relative), "exec")
+        for relative in targets:
+            if (staging / relative).read_bytes() != (root / relative).read_bytes():
+                shutil.copyfile(staging / relative, root / relative)
+    print(f"[{PATCH_VERSION}] validated and installed all wrapper patches")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("wrapper_root", type=Path)
@@ -543,10 +554,7 @@ def main() -> None:
     args = parser.parse_args()
     root = args.wrapper_root.resolve()
     verify_revision(root, args.expected_ref)
-    patch_generation_worker(root)
-    patch_main(root)
-    patch_postprocess_worker(root)
-    verify_queue_accounting(root)
+    apply_patches(root)
     print(f"[{PATCH_VERSION}] complete")
 
 

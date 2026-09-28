@@ -9,7 +9,7 @@ Zenith 13 deployment with Upscaler & Detailer using Vast ComfyUI Serverless + of
 - `zpenis-zit-v1_5.safetensors`
 - ComfyUI `vastai/comfy@sha256:f3221c99b2079935d2714be228e56251f9913ca32433f0e40a27632b1510858c` (tag source: `v0.35.0-cuda-12.9-py312`)
 - PyWorker `2207a3f94b55a0921c1641520eeb83de5a0c1611`
-- ai-dock API wrapper `e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88` + `rosely-wrapper-hardening-v2`
+- ai-dock API wrapper `e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88` + `rosely-wrapper-hardening-v3`
 - `COMFYUI_API_BASE=http://127.0.0.1:18188`
 - 12 steps, CFG 1.0, `dpmpp_sde`, `simple`
 
@@ -71,6 +71,16 @@ Copy the remaining values from `endpoint-env.example`. Never commit real AWS or 
 The full bundle intentionally keeps optional assets even when they are not used by the active production flow.
 
 ## Validate
+The v3 patch fixes the v2 provisioning failure before the S3 model download:
+an incorrectly encoded dash in an upstream comment prevented the postprocess
+replacement from matching. It now matches executable statements, reads/writes
+UTF-8 explicitly, and validates all edits on temporary copies before installing
+them. A retry can finish an instance left partially patched by v2.
+
+Publish the provisioner and `runtime/patch_api_wrapper.py` in the same commit:
+the provisioner verifies the patcher's SHA-256. Redeploying only the AWS backend
+does not update these files fetched by the Vast instance from this repository.
+
 ```bash
 bash -n provision_vast_zit_unified.sh
 python scripts/validate_repo.py
@@ -78,6 +88,19 @@ python scripts/test_builder.py
 python scripts/test_runtime.py
 python -m compileall -q .
 ```
+
+Before releasing wrapper changes, also test against the pinned upstream source
+(this does not download models or call Vast):
+
+```bash
+wrapper_test_source=$(mktemp -d)
+git -C "$wrapper_test_source" init -q
+git -C "$wrapper_test_source" fetch --depth 1 https://github.com/ai-dock/comfyui-api-wrapper.git e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88
+ROSELY_WRAPPER_TEST_SOURCE="$wrapper_test_source" python scripts/test_wrapper_patch.py
+```
+
+These checks cover a clean installation, idempotent reruns, recovery from the
+partial v2 patch, and preserving installed files if any source match fails.
 
 ## Deployment smoke test
 1. Launch one Vast instance with the values from `endpoint-env.example`.

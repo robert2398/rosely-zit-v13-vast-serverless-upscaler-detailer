@@ -35,7 +35,7 @@ API_WRAPPER_ROOT="${API_WRAPPER_ROOT:-/opt/comfyui-api-wrapper}"
 API_WRAPPER_REF="${API_WRAPPER_REF:-e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88}"
 ROSELY_RUNTIME_BASE_URL="${ROSELY_RUNTIME_BASE_URL:-https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/runtime}"
 ROSELY_RUNTIME_ROOT="${ROSELY_RUNTIME_ROOT:-/opt/rosely}"
-API_WRAPPER_PATCHER_SHA256="e8043245649b143982819fab77d4874a0c779c9be5c50a7ae80f5c35d40d79af"
+API_WRAPPER_PATCHER_SHA256="f8384ae822107758fe261f8a67af9554c6090d9a0614f73a6b5055ddf50e5b5b"
 API_WRAPPER_WATCHDOG_SHA256="07cd720d45ed7402c732cd20220dff3b95453bf132026c95becc9bb8edea2e86"
 OUTPUT_SWEEPER_SHA256="07ab2664a898c8407a832e1cb16d031633cb946df727eaaade4582fed248bb95"
 
@@ -201,7 +201,7 @@ patch_api_wrapper_runtime(){
     "$API_WRAPPER_ROOT/workers/postprocess_worker.py"
 
   printf '%s\n' "$API_WRAPPER_REF" > "${STATE_ROOT}/api-wrapper.source-ref"
-  printf '%s\n' "rosely-wrapper-hardening-v2" > "${STATE_ROOT}/api-wrapper.patch-version"
+  printf '%s\n' "rosely-wrapper-hardening-v3" > "${STATE_ROOT}/api-wrapper.patch-version"
   log "API wrapper source and Rosely patch verified"
 }
 
@@ -643,5 +643,5 @@ install_supervisor_recovery_services
 
 log "custom nodes: Impact Pack + Impact Subpack + SeedVR2 + VRGameDevGirl installed"
 log "benchmark = $BENCHMARK_JSON_PATH"
-log "API wrapper = ${API_WRAPPER_REF} + rosely-wrapper-hardening-v2"
+log "API wrapper = ${API_WRAPPER_REF} + rosely-wrapper-hardening-v3"
 log "Provisioning complete: Zenith 13 full bundle + Detailer/SeedVR2 assets + wrapper self-healing"

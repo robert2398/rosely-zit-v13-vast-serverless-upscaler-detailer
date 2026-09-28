@@ -9,7 +9,7 @@ Updated: 2026-09-28
 - PyWorker: `2207a3f94b55a0921c1641520eeb83de5a0c1611`
 - Direct ComfyUI backend: `COMFYUI_API_BASE=http://127.0.0.1:18188`
 - API wrapper source: `e1d04af1f3bbd2d44c33e0adf419d6ca57dedd88`
-- Rosely wrapper patch: `rosely-wrapper-hardening-v2`
+- Rosely wrapper patch: `rosely-wrapper-hardening-v3`
 - Provisioner: `https://raw.githubusercontent.com/robert2398/rosely-zit-v13-vast-serverless-upscaler-detailer/main/provision_vast_zit_unified.sh`
 
 ## Pinned model bundle
@@ -48,6 +48,28 @@ python -m compileall -q .
 ```
 
 The repository validator also checks the runtime-asset SHA pins, wrapper source pin, Supervisor program definitions, deep-health fields, S3 verification, history invalidation, and marker-gated cleanup contract.
+
+## Instance 53109018 provisioning fix
+
+The supplied instance log shows all three provisioning attempts failed while
+matching the postprocess base64 block, before the S3 bundle download. The v2
+patch used a misencoded em dash in a comment as part of that exact match. The
+wrapper revision itself matched the expected source pin.
+
+Version v3 matches the executable base64 block, uses explicit UTF-8, and validates
+all patched modules on temporary copies before installing the result. The
+provisioner and repository validator now pin its updated SHA-256.
+
+Verified locally against Git objects from the actual pinned upstream commit:
+
+- Clean source patches successfully and every changed module compiles.
+- Applying the patch twice leaves identical files.
+- Retrying the partial v2 state completes successfully.
+- A source mismatch fails without changing any installed target file.
+
+Repository validation, workflow builder checks, runtime tests, wrapper patch
+integration tests, and Bash syntax validation passed. This fix has not been
+published or executed on a live Vast GPU from this workspace.
 
 ## Runtime recovery contract
 
